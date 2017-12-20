@@ -4,8 +4,8 @@ android:
   components:
     - tools
     - platform-tools
-    - build-tools-22.0.1
-    - android-22
+    - build-tools-26.0.2
+    - android-26
     - extra-google-google_play_services
     - extra-android-m2repository
     - extra-android-support
@@ -15,7 +15,6 @@ after_success:
   - .buildscript/deploy_snapshot.sh
 
 jdk:
-  - oraclejdk7
   - oraclejdk8
 
 branches:
@@ -25,7 +24,7 @@ branches:
 notifications:
   email: false
 
-script: ./gradlew check assemble
+script: ./gradlew assemble check
 
 sudo: false
 

@@ -21,13 +21,25 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Register a class or method to handle multiple deep links.
+ * Declare a specification for a type of DeepLink. For example:
  * <pre><code>
- * {@literal @}DeepLinks({uri2, uri2});
+ * {@literal @}DeepLinkSpec(
+ *    prefix = { "http://example.com", "https://example.com" })
+ *  public{@literal @}interface WebDeepLink {
+ *    String[] value();
+ *  }
  * </code></pre>
+ * <p>
+ * <code>{@literal @}WebDeepLink({ "/foo", "/bar" })</code> will match any of
+ * <ul>
+ * <li>http://example.com/foo</li>
+ * <li>https://example.com/foo</li>
+ * <li>http://example.com/bar</li>
+ * <li>https://example.com/bar</li>
+ * </ul>
  */
+@Target({ ElementType.ANNOTATION_TYPE })
 @Retention(RetentionPolicy.CLASS)
-@Target({ ElementType.TYPE, ElementType.METHOD })
-public @interface DeepLinks {
-  String[] value();
+public @interface DeepLinkSpec {
+  String[] prefix();
 }

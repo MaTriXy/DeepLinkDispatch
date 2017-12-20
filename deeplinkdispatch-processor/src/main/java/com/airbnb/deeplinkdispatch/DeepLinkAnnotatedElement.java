@@ -18,15 +18,16 @@ package com.airbnb.deeplinkdispatch;
 import java.net.MalformedURLException;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
 
 final class DeepLinkAnnotatedElement {
-
   private final String uri;
   private final DeepLinkEntry.Type annotationType;
-  private final String activity;
+  private final TypeElement annotatedElement;
   private final String method;
+  private final Element element;
 
-  public DeepLinkAnnotatedElement(String annotation, Element element, DeepLinkEntry.Type type)
+  DeepLinkAnnotatedElement(String annotation, Element element, DeepLinkEntry.Type type)
       throws MalformedURLException {
     DeepLinkUri url = DeepLinkUri.parse(annotation);
     if (url == null) {
@@ -36,12 +37,13 @@ final class DeepLinkAnnotatedElement {
     annotationType = type;
 
     if (type == DeepLinkEntry.Type.METHOD) {
-      activity = element.getEnclosingElement().toString();
+      annotatedElement = (TypeElement) element.getEnclosingElement();
       method = element.getSimpleName().toString();
     } else {
-      activity = element.toString();
+      annotatedElement = (TypeElement) element;
       method = null;
     }
+    this.element = element;
   }
 
   String getUri() {
@@ -52,11 +54,15 @@ final class DeepLinkAnnotatedElement {
     return annotationType;
   }
 
-  String getActivity() {
-    return activity;
+  TypeElement getAnnotatedElement() {
+    return annotatedElement;
   }
 
   String getMethod() {
     return method;
+  }
+
+  Element getElement() {
+    return element;
   }
 }
