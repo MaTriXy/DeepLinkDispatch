@@ -5,31 +5,11 @@ sourceCompatibility = 1.7
 apply plugin: 'com.bmuschko.nexus'
 apply plugin: 'checkstyle'
 
-sourceSets {
-  test {
-    java {
-      srcDir '../deeplinkdispatch/src/main/java' // In tests we need access to the runtime files from the dld library
-    }
-  }
-}
-
 dependencies {
-  implementation project(':deeplinkdispatch-base')
-  implementation 'com.google.auto.service:auto-service:1.0-rc3'
+  implementation deps.okio
   implementation deps.jsr305
-  implementation deps.javaPoet
-  implementation deps.autoCommon
-
   testImplementation deps.junit
   testImplementation deps.assertJ
-  testImplementation deps.android
-  // For test compile we need a reference of the DeepLinkDelegate (which has android dependencies)
-  // Cannot depend on them from Maven as they are .aar and not .jar files (this is a java project)
-  testImplementation fileTree(dir: 'libs', include: ['androidx.localbroadcastmanager-1.0.0-beta1.jar','androidx.core-1.0.0-beta1.jar'])
-  testImplementation deps.compileTesting
-  testImplementation deps.truth
-  testImplementation deps.mockito
-  testImplementation files(org.gradle.internal.jvm.Jvm.current().getToolsJar())
 }
 
 checkstyle {
@@ -43,13 +23,13 @@ project.version = PROJECT_VERSION
 
 modifyPom {
   project {
-    name 'DeepLinkDispatch processor'
+    name 'DeepLinkDispatch library'
     description PROJECT_DESCRIPTION
     url PROJECT_URL
     inceptionYear '2015'
     version PROJECT_VERSION
     groupId PROJECT_GROUP_ID
-    artifactId 'deeplinkdispatch-processor'
+    artifactId 'deeplinkdispatch-base'
 
     scm {
       url PROJECT_URL
@@ -74,6 +54,7 @@ modifyPom {
     }
   }
 }
+
 
 extraArchive {
   sources = true
