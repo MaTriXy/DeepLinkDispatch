@@ -26,7 +26,7 @@ import java.lang.annotation.Target;
  * incoming {@code Intent} to the correct Activities annotated with {@link DeepLink}.
  */
 @Target({ ElementType.TYPE })
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 public @interface DeepLinkHandler {
   /**
    * A list of {@link DeepLinkModule} annotated classes used for collecting all the deep links in
@@ -38,5 +38,6 @@ public @interface DeepLinkHandler {
   String ACTION = "com.airbnb.deeplinkdispatch.DEEPLINK_ACTION";
   String EXTRA_SUCCESSFUL = "com.airbnb.deeplinkdispatch.EXTRA_SUCCESSFUL";
   String EXTRA_URI = "com.airbnb.deeplinkdispatch.EXTRA_URI";
+  String EXTRA_URI_TEMPLATE = "com.airbnb.deeplinkdispatch.EXTRA_URI_TEMPLATE";
   String EXTRA_ERROR_MESSAGE = "com.airbnb.deeplinkdispatch.EXTRA_ERROR_MESSAGE";
 }

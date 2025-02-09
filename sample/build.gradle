@@ -1,5 +1,11 @@
-apply plugin: 'com.android.application'
-apply plugin: 'checkstyle'
+plugins {
+  id("com.android.application")
+  id("checkstyle")
+  id("kotlin-android")
+  id("com.google.devtools.ksp")
+  id('org.jmailen.kotlinter')
+}
+
 
 checkstyle {
   configFile rootProject.file('checkstyle.xml')
@@ -8,35 +14,60 @@ checkstyle {
 }
 
 android {
-  compileSdkVersion androidConfig.compileSdkVersion
-  buildToolsVersion androidConfig.buildToolsVersion
+    compileSdk androidConfig.compileSdkVersion
 
-  defaultConfig {
+    defaultConfig {
     applicationId "com.airbnb.deeplinkdispatch.sample"
-    minSdkVersion androidConfig.minSdkVersion
-    targetSdkVersion androidConfig.compileSdkVersion
-    versionCode 1
+        minSdk androidConfig.minSdkVersion
+        targetSdk androidConfig.compileSdkVersion
+        versionCode 1
     versionName "1.0"
   }
-  packagingOptions {
-    exclude 'META-INF/services/javax.annotation.processing.Processor'
+  buildTypes {
+    release {
+      minifyEnabled true
+      shrinkResources true
+      proguardFiles getDefaultProguardFile(
+              'proguard-android-optimize.txt'),
+              'proguard-rules.pro'
+    }
   }
-  lintOptions {
-    disable 'InvalidPackage'
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/services/javax.annotation.processing.Processor']
+        }
+    }
+
+    kotlinOptions {
+    jvmTarget = "11"
   }
+    lint {
+        disable 'InvalidPackage'
+    }
 }
 
 dependencies {
   implementation project(':deeplinkdispatch')
-  annotationProcessor project(':deeplinkdispatch-processor')
+  ksp project(':deeplinkdispatch-processor')
   implementation project(':sample-library')
+  implementation project(':sample-kapt-library')
+  implementation project(':sample-benchmarkable-library')
   implementation deps.appCompat
+  implementation deps.localBroadcastManager
 
+  testImplementation deps.androidxTestCore
   testImplementation deps.roboelectric
-  testImplementation deps.roboelectricShadowSupport
   testImplementation deps.junit
+  testImplementation deps.mockk
 }
 
-tasks.withType(JavaCompile) {
-  options.compilerArgs << "-AdeepLinkDoc.output=${buildDir}/doc/deeplinks.txt"
+ksp {
+    arg("deepLinkDoc.output", "${buildDir}/doc/deeplinks.txt")
+    arg("deepLink.incremental", "true")
+    arg("deepLink.customAnnotations",
+        "com.airbnb.deeplinkdispatch.sample.AppDeepLink|"
+            + "com.airbnb.deeplinkdispatch.sample.WebDeepLink|"
+            + "com.airbnb.deeplinkdispatch.sample.WebPlaceholderDeepLink|"
+            + "com.airbnb.deeplinkdispatch.sample.library.LibraryDeepLink"
+    )
 }

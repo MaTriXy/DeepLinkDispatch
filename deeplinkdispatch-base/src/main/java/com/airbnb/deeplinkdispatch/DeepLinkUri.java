@@ -16,6 +16,12 @@
 
 package com.airbnb.deeplinkdispatch;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import org.jetbrains.annotations.NotNull;
+
+import java.io.EOFException;
 import java.net.IDN;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
@@ -26,17 +32,25 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okio.Buffer;
 
 /**
- * Adapted from OkHttp's HttpUrl class. Only change is to allow any scheme, instead of just http or
- * https.
- *https://github.com/square/okhttp/blob/master/okhttp/src/main/java/com/squareup/okhttp/HttpUri.java
+ * Adapted from OkHttp's HttpUrl class. Changes are:
+ *  * Allow any scheme, instead of just http or https.
+ *  * when parsing via parseTemplate(url) allow placeholder chars({}) in url.
+ *
+ * https://github.com/square/okhttp/blob/master/okhttp/src/main/java/com/squareup/okhttp/
+ * HttpUri.java
  */
 public final class DeepLinkUri {
   private static final char[] HEX_DIGITS =
@@ -49,6 +63,7 @@ public final class DeepLinkUri {
   static final String CONVERT_TO_URI_ENCODE_SET = "^`{}|\\";
   static final String FORM_ENCODE_SET = " \"':;<=>@[]^`{}|/\\?#&!$(),~";
   static final String FRAGMENT_ENCODE_SET = "";
+  static final Pattern PLACEHOLDER_REGEX = Pattern.compile("\\{(.*?)\\}");
 
   /** Either "http" or "https". */
   private final String scheme;
@@ -77,7 +92,7 @@ public final class DeepLinkUri {
    * non-empty, but never null. Values are null if the name has no corresponding '=' separator, or
    * empty, or non-empty.
    */
-  private final List<String> queryNamesAndValues;
+  private final @Nullable List<String> queryNamesAndValues;
 
   /** Decoded fragment. */
   private final String fragment;
@@ -85,7 +100,9 @@ public final class DeepLinkUri {
   /** Canonical URL. */
   private final String url;
 
-  private DeepLinkUri(Builder builder) {
+  private String urlTemplate;
+
+  private DeepLinkUri(Builder builder, String urlTemplate) {
     this.scheme = builder.scheme;
     this.username = percentDecode(builder.encodedUsername);
     this.password = percentDecode(builder.encodedPassword);
@@ -99,6 +116,7 @@ public final class DeepLinkUri {
         ? percentDecode(builder.encodedFragment)
         : null;
     this.url = builder.toString();
+    this.urlTemplate = urlTemplate;
   }
 
   /** Returns this URL as a {@link URL java.net.URL}. */
@@ -295,6 +313,32 @@ public final class DeepLinkUri {
     return result.toString();
   }
 
+  public @NonNull
+  Set<String> getSchemeHostPathPlaceholders() {
+    if (toTemplateString() == null) return Collections.emptySet();
+    if (this.query() == null || this.query().isEmpty()) return getPlaceHolders(toTemplateString());
+    return getPlaceHolders(
+      toTemplateString().substring(0, toTemplateString().indexOf(this.query()))
+    );
+  }
+
+  @NotNull
+  private static Set<String> getPlaceHolders(String input) {
+    final Matcher matcher = PLACEHOLDER_REGEX.matcher(input);
+    Set<String> placeholders = new HashSet<>(matcher.groupCount());
+    while (matcher.find()) {
+      for (int i = 1; i <= matcher.groupCount(); i++) {
+        placeholders.add(matcher.group(i));
+      }
+    }
+    return placeholders;
+  }
+
+  @Nullable
+  List<String> getQueryNamesAndValues() {
+    return queryNamesAndValues;
+  }
+
   int querySize() {
     return queryNamesAndValues != null ? queryNamesAndValues.size() / 2 : 0;
   }
@@ -354,7 +398,7 @@ public final class DeepLinkUri {
   /** Returns the URL that would be retrieved by following {@code link} from this URL. */
   DeepLinkUri resolve(String link) {
     Builder builder = new Builder();
-    Builder.ParseResult result = builder.parse(this, link);
+    Builder.ParseResult result = builder.parse(this, link, false);
     return result == Builder.ParseResult.SUCCESS ? builder.build() : null;
   }
 
@@ -377,8 +421,22 @@ public final class DeepLinkUri {
    * URL, or null if it isn't.
    */
   public static DeepLinkUri parse(String url) {
+    return parse(url, false);
+  }
+
+  /**
+   * Like parse(String url) but allow '{' '}' chars in scheme to allow using placeholders in scheme.
+   *
+   * @param url
+   * @return
+   */
+  public static DeepLinkUri parseTemplate(String url) {
+    return parse(url, true);
+  }
+
+  private static DeepLinkUri parse(String url, boolean allowPlaceholderInScheme) {
     Builder builder = new Builder();
-    Builder.ParseResult result = builder.parse(null, url);
+    Builder.ParseResult result = builder.parse(null, url, allowPlaceholderInScheme);
     return result == Builder.ParseResult.SUCCESS ? builder.build() : null;
   }
 
@@ -399,7 +457,7 @@ public final class DeepLinkUri {
    */
   static DeepLinkUri getChecked(String url) throws MalformedURLException, UnknownHostException {
     Builder builder = new Builder();
-    Builder.ParseResult result = builder.parse(null, url);
+    Builder.ParseResult result = builder.parse(null, url, false);
     switch (result) {
       case SUCCESS:
         return builder.build();
@@ -429,6 +487,10 @@ public final class DeepLinkUri {
     return url;
   }
 
+  public String toTemplateString() {
+    return urlTemplate;
+  }
+
   static final class Builder {
     String scheme;
     String encodedUsername = "";
@@ -438,6 +500,7 @@ public final class DeepLinkUri {
     final List<String> encodedPathSegments = new ArrayList<>();
     List<String> encodedQueryNamesAndValues;
     String encodedFragment;
+    String templateUrl;
 
     Builder() {
       encodedPathSegments.add(""); // The default path is '/' which needs a trailing space.
@@ -643,7 +706,7 @@ public final class DeepLinkUri {
     DeepLinkUri build() {
       if (scheme == null) throw new IllegalStateException("scheme == null");
       if (host == null) throw new IllegalStateException("host == null");
-      return new DeepLinkUri(this);
+      return new DeepLinkUri(this, templateUrl);
     }
 
     @Override public String toString() {
@@ -698,12 +761,18 @@ public final class DeepLinkUri {
       INVALID_HOST,
     }
 
-    ParseResult parse(DeepLinkUri base, String input) {
+    ParseResult parse(DeepLinkUri base, String input, boolean allowPlaceholderInScheme) {
       int pos = skipLeadingAsciiWhitespace(input, 0, input.length());
       int limit = skipTrailingAsciiWhitespace(input, pos, input.length());
+      if (allowPlaceholderInScheme) {
+        templateUrl = input;
+      }
 
       // Scheme.
-      int schemeDelimiterOffset = schemeDelimiterOffset(input, pos, limit);
+      int schemeDelimiterOffset = schemeDelimiterOffset(input,
+        pos,
+        limit,
+        allowPlaceholderInScheme);
       if (schemeDelimiterOffset != -1) {
         if (input.regionMatches(true, pos, "https:", 0, 6)) {
           this.scheme = "https";
@@ -740,28 +809,28 @@ public final class DeepLinkUri {
         while (true) {
           int componentDelimiterOffset = delimiterOffset(input, pos, limit, "@/\\?#");
           int c = componentDelimiterOffset != limit
-              ? input.charAt(componentDelimiterOffset)
-              : -1;
+            ? input.charAt(componentDelimiterOffset)
+            : -1;
           switch (c) {
             case '@':
               // User info precedes.
               if (!hasPassword) {
                 int passwordColonOffset = delimiterOffset(
-                    input, pos, componentDelimiterOffset, ":");
+                  input, pos, componentDelimiterOffset, ":");
                 String canonicalUsername = canonicalize(
-                    input, pos, passwordColonOffset, USERNAME_ENCODE_SET, true, false);
+                  input, pos, passwordColonOffset, USERNAME_ENCODE_SET, true, false);
                 this.encodedUsername = hasUsername
-                    ? this.encodedUsername + "%40" + canonicalUsername
-                    : canonicalUsername;
+                  ? this.encodedUsername + "%40" + canonicalUsername
+                  : canonicalUsername;
                 if (passwordColonOffset != componentDelimiterOffset) {
                   hasPassword = true;
                   this.encodedPassword = canonicalize(input, passwordColonOffset + 1,
-                      componentDelimiterOffset, PASSWORD_ENCODE_SET, true, false);
+                    componentDelimiterOffset, PASSWORD_ENCODE_SET, true, false);
                 }
                 hasUsername = true;
               } else {
                 this.encodedPassword = this.encodedPassword + "%40" + canonicalize(
-                    input, pos, componentDelimiterOffset, PASSWORD_ENCODE_SET, true, false);
+                  input, pos, componentDelimiterOffset, PASSWORD_ENCODE_SET, true, false);
               }
               pos = componentDelimiterOffset + 1;
               break;
@@ -878,9 +947,9 @@ public final class DeepLinkUri {
 
     private boolean isDotDot(String input) {
       return input.equals("..")
-          || input.equalsIgnoreCase("%2e.")
-          || input.equalsIgnoreCase(".%2e")
-          || input.equalsIgnoreCase("%2e%2e");
+        || input.equalsIgnoreCase("%2e.")
+        || input.equalsIgnoreCase(".%2e")
+        || input.equalsIgnoreCase("%2e%2e");
     }
 
     /**
@@ -948,21 +1017,31 @@ public final class DeepLinkUri {
      * Returns the index of the ':' in {@code input} that is after scheme characters. Returns -1 if
      * {@code input} does not have a scheme that starts at {@code pos}.
      */
-    private static int schemeDelimiterOffset(String input, int pos, int limit) {
+    private static int schemeDelimiterOffset(String input,
+                                             int pos,
+                                             int limit,
+                                             boolean allowPlaceholderInScheme) {
       if (limit - pos < 2) return -1;
 
       char c0 = input.charAt(pos);
-      if ((c0 < 'a' || c0 > 'z') && (c0 < 'A' || c0 > 'Z')) return -1; // Not a scheme start char.
+      if ((c0 < 'a' || c0 > 'z') && (c0 < 'A' || c0 > 'Z')
+        && (allowPlaceholderInScheme && c0 != '{')) return -1; // Not a scheme start char.
 
+      boolean inPlaceholder = c0 == '{' ? true : false;
       for (int i = pos + 1; i < limit; i++) {
         char c = input.charAt(i);
-
         if ((c >= 'a' && c <= 'z')
-            || (c >= 'A' && c <= 'Z')
-            || (c >= '0' && c <= '9')
-            || c == '+'
-            || c == '-'
-            || c == '.') {
+          || (c >= 'A' && c <= 'Z')
+          || (c >= '0' && c <= '9')
+          || c == '+'
+          || c == '-'
+          || c == '.'
+          || (c == '{' && allowPlaceholderInScheme)
+          || (c == '}' && allowPlaceholderInScheme)
+          || inPlaceholder
+        ) {
+          if (c == '{') inPlaceholder = true;
+          if (c == '}') inPlaceholder = false;
           continue; // Scheme character. Keep going.
         } else if (c == ':') {
           return i; // Scheme prefix!
@@ -1138,7 +1217,22 @@ public final class DeepLinkUri {
      */
     private static String domainToAscii(String input) {
       try {
-        String result = IDN.toASCII(input).toLowerCase(Locale.US);
+        // When this is a template URI it might get to long (> 256 chars) with all the placeholder
+        // definitions to pass verification.
+        // This will replace the placeholders with other shorter placeholders for URI validation.
+        Set<String> placeholders = getPlaceHolders(input);
+        String mappedInput = input;
+        Map<String, String> placeholderMap = new HashMap(placeholders.size());
+        int i = 0;
+        for (String placeholder : placeholders) {
+          String replacedValue = "" + (i++);
+          mappedInput = mappedInput.replace(placeholder, replacedValue);
+          placeholderMap.put(placeholder, replacedValue);
+        }
+        String result = IDN.toASCII(mappedInput).toLowerCase(Locale.US);
+        for (Map.Entry<String, String> entry : placeholderMap.entrySet()) {
+          result = result.replace(entry.getValue(), entry.getKey());
+        }
         if (result.isEmpty()) return null;
 
         if (result == null) return null;
@@ -1339,11 +1433,16 @@ public final class DeepLinkUri {
           utf8Buffer = new Buffer();
         }
         utf8Buffer.writeUtf8CodePoint(codePoint);
-        while (!utf8Buffer.exhausted()) {
-          int b = utf8Buffer.readByte() & 0xff;
-          out.writeByte('%');
-          out.writeByte(HEX_DIGITS[(b >> 4) & 0xf]);
-          out.writeByte(HEX_DIGITS[b & 0xf]);
+        try {
+          while (!utf8Buffer.exhausted()) {
+            int b = utf8Buffer.readByte() & 0xff;
+            out.writeByte('%');
+            out.writeByte(HEX_DIGITS[(b >> 4) & 0xf]);
+            out.writeByte(HEX_DIGITS[b & 0xf]);
+          }
+        } catch (EOFException e) {
+          // Cannot happen as we never read over the end.
+          System.err.println("Unable to canonicalize deeplink url!");
         }
       } else {
         // This character doesn't need encoding. Just copy it over.

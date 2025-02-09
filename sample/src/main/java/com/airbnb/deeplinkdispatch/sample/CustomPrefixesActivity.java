@@ -14,13 +14,14 @@ import com.airbnb.deeplinkdispatch.sample.library.LibraryDeepLink;
  */
 @AppDeepLink({ "/view_users" })
 @WebDeepLink({ "/users", "/user/{id}" })
+@WebPlaceholderDeepLink({ "/guests", "/guest/{id}" })
 @LibraryDeepLink({ "/library_deeplink", "/library_deeplink/{lib_id}" })
 public class CustomPrefixesActivity extends AppCompatActivity {
   private static final String TAG = CustomPrefixesActivity.class.getSimpleName();
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_main);
+    setContentView(R.layout.sample_activity_main);
 
     if (getIntent().getBooleanExtra(DeepLink.IS_DEEP_LINK, false)) {
       Bundle parameters = getIntent().getExtras();

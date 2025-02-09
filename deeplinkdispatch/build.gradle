@@ -1,9 +1,12 @@
 apply plugin: 'com.android.library'
 
-sourceCompatibility = 1.7
+sourceCompatibility = 11
 
-apply plugin: 'com.bmuschko.nexus'
 apply plugin: 'checkstyle'
+
+apply plugin: 'kotlin-android'
+apply from: '../publishing.gradle'
+apply plugin: 'org.jmailen.kotlinter'
 
 dependencies {
   api project(':deeplinkdispatch-base')
@@ -11,6 +14,7 @@ dependencies {
   implementation deps.jsr305
   implementation deps.localBroadcastManager
   implementation deps.appCompat
+  testImplementation deps.mockk
   testImplementation deps.junit
   testImplementation deps.assertJ
 }
@@ -22,62 +26,15 @@ checkstyle {
 }
 
 android {
-  compileSdkVersion androidConfig.compileSdkVersion
-  buildToolsVersion androidConfig.buildToolsVersion
+    compileSdk androidConfig.compileSdkVersion
 
-  defaultConfig {
-    minSdkVersion androidConfig.minSdkVersion
-    targetSdkVersion androidConfig.compileSdkVersion
-    testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    defaultConfig {
+        minSdk androidConfig.minSdkVersion
+        targetSdk androidConfig.compileSdkVersion
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    consumerProguardFiles 'proguard-rules.pro'
   }
-}
-
-project.group = PROJECT_GROUP_ID
-project.version = PROJECT_VERSION
-
-modifyPom {
-  project {
-    name 'DeepLinkDispatch library'
-    description PROJECT_DESCRIPTION
-    url PROJECT_URL
-    inceptionYear '2015'
-    version PROJECT_VERSION
-    groupId PROJECT_GROUP_ID
-    artifactId 'deeplinkdispatch'
-
-    scm {
-      url PROJECT_URL
-      connection 'scm:https://github.com/airbnb/DeepLinkDispatch.git'
-      developerConnection 'scm:git@github.com:airbnb/DeepLinkDispatch.git'
-    }
-
-    licenses {
-      license {
-        name 'The Apache Software License, Version 2.0'
-        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-        distribution 'repo'
-      }
-    }
-
-    developers {
-      developer {
-        id 'airbnb'
-        name 'Airbnb'
-        email 'android@airbnb.com'
-      }
-    }
+  testOptions {
+    unitTests.returnDefaultValues = true
   }
-}
-
-
-extraArchive {
-  sources = true
-  tests = false
-  javadoc = true
-}
-
-nexus {
-  sign = !isCi()
-  repositoryUrl = getReleaseRepositoryUrl()
-  snapshotRepositoryUrl = getSnapshotRepositoryUrl()
 }
